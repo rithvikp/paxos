@@ -77,12 +77,12 @@ func (p *Proposer) handleClientInput(val int) {
 	p.sentAcceptMsg = false
 	p.resendTimer = time.NewTimer(proposalRepeatInterval)
 
-	for id, a := range p.Acceptors {
+	for aID, a := range p.Acceptors {
 		out := Msg{
 			Prepare: &PrepareMsg{
 				Slot:           p.slot,
 				ProposerID:     p.ID,
-				AcceptorID:     id,
+				AcceptorID:     aID,
 				ProposalNumber: p.proposalNumber,
 			},
 		}
@@ -103,12 +103,12 @@ func (p *Proposer) handlePromise(msg PromiseMsg) {
 		p.resendTimer.Stop()
 		p.sentAcceptMsg = true
 
-		for id, a := range p.Acceptors {
+		for aID, a := range p.Acceptors {
 			out := Msg{
 				Accept: &AcceptMsg{
 					Slot:           p.slot,
 					ProposerID:     p.ID,
-					AcceptorID:     id,
+					AcceptorID:     aID,
 					ProposalNumber: p.proposalNumber,
 					Value:          p.value,
 				},

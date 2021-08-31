@@ -52,6 +52,8 @@ func (a *Acceptor) handlePrepare(msg PrepareMsg) {
 
 	out := PromiseMsg{
 		Slot:                   state.slot,
+		ProposerID:             msg.ProposerID,
+		AcceptorID:             a.ID,
 		AcceptedProposalNumber: state.acceptedProposalNumber,
 		AcceptedValue:          state.acceptedValue,
 	}
@@ -77,14 +79,14 @@ func (a *Acceptor) handleAccept(msg AcceptMsg) {
 	state.acceptedProposalNumber = &msg.ProposalNumber
 	state.acceptedValue = &msg.Value
 
-	out := AcceptedMsg{
-		Slot:           state.slot,
-		AcceptorID:     a.ID,
-		ProposalNumber: msg.ProposalNumber,
-		Value:          msg.Value,
-	}
-
-	for _, ch := range a.ProposerOutput {
+	for pID, ch := range a.ProposerOutput {
+		out := AcceptedMsg{
+			Slot:           state.slot,
+			ProposerID:     pID,
+			AcceptorID:     a.ID,
+			ProposalNumber: msg.ProposalNumber,
+			Value:          msg.Value,
+		}
 		ch.Write() <- Msg{Accepted: &out}
 	}
 

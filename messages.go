@@ -1,5 +1,10 @@
 package paxos
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // Phase 1A
 type PrepareMsg struct {
 	Slot           int
@@ -11,6 +16,8 @@ type PrepareMsg struct {
 // Phase 1B
 type PromiseMsg struct {
 	Slot                   int
+	ProposerID             int
+	AcceptorID             int
 	AcceptedProposalNumber *int
 	AcceptedValue          *int
 }
@@ -27,6 +34,7 @@ type AcceptMsg struct {
 // Phase 2B
 type AcceptedMsg struct {
 	Slot           int
+	ProposerID     int
 	AcceptorID     int
 	ProposalNumber int
 	Value          int
@@ -38,4 +46,29 @@ type Msg struct {
 	Accept   *AcceptMsg
 	Promise  *PromiseMsg
 	Accepted *AcceptedMsg
+}
+
+func MsgToString(msg Msg) string {
+	var data interface{}
+	var prefix string
+	if msg.Prepare != nil {
+		data = msg.Prepare
+		prefix = "Prepare"
+	} else if msg.Accept != nil {
+		data = msg.Accept
+		prefix = "Accept"
+	} else if msg.Promise != nil {
+		data = msg.Promise
+		prefix = "Promise"
+	} else if msg.Accepted != nil {
+		data = msg.Accepted
+		prefix = "Accepted"
+	}
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		panic(fmt.Sprintf("Unable to convert the given message to a string: %v", err))
+	}
+
+	return fmt.Sprintf("%s: %s", prefix, b)
 }

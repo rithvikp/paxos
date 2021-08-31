@@ -2,8 +2,8 @@ package paxos
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"sync"
 )
@@ -18,15 +18,6 @@ func NewChannelSupervisor() *ChannelSupervisor {
 		mu:     &sync.Mutex{},
 		reader: bufio.NewReader(os.Stdin),
 	}
-}
-
-func (s *ChannelSupervisor) AskToSend(data interface{}) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	b, _ := json.MarshalIndent(data, "", "\t")
-	fmt.Printf("%s\nAccept?: ", b)
-	text, _ := s.reader.ReadString('\n')
-	return text == "y"
 }
 
 // Channel defines an non-FIFO, lossy channel. Specifically, messages sent through a Channel could
@@ -57,7 +48,12 @@ func (c *Channel) Run() {
 	for {
 		select {
 		case in := <-c.write:
-			c.read <- in
+			if rand.Float64() > 0.2 {
+				fmt.Printf("SENT: %s\n", MsgToString(in))
+				c.read <- in
+			} else {
+				fmt.Printf("\tNOT SENT: %s\n", MsgToString(in))
+			}
 		}
 	}
 }
