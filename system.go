@@ -4,7 +4,7 @@ import "time"
 
 const (
 	// The amount of time to wait between loop iterations
-	loopWaitTime time.Duration = 5 * time.Millisecond
+	loopWaitTime time.Duration = 1 * time.Millisecond
 )
 
 type System struct {

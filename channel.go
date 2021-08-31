@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"sync"
+	"time"
 )
 
 type ChannelSupervisor struct {
@@ -48,6 +49,7 @@ func (c *Channel) Run() {
 	for {
 		select {
 		case in := <-c.write:
+			time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
 			if rand.Float64() > 0.2 {
 				fmt.Printf("SENT: %s\n", MsgToString(in))
 				c.read <- in
