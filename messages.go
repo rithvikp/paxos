@@ -2,18 +2,21 @@ package paxos
 
 // Phase 1A
 type PrepareMsg struct {
+	Slot           int
 	ProposerID     int
 	ProposalNumber int
 }
 
 // Phase 1B
 type PromiseMsg struct {
+	Slot                   int
 	AcceptedProposalNumber *int
 	AcceptedValue          *int
 }
 
 // Phase 2A
 type AcceptMsg struct {
+	Slot           int
 	ProposerID     int
 	ProposalNumber int
 	Value          int
@@ -21,23 +24,16 @@ type AcceptMsg struct {
 
 // Phase 2B
 type AcceptedMsg struct {
-	AcceptorID int
-}
-
-// Phase 2B
-type LearnerAcceptedMsg struct {
+	Slot           int
+	AcceptorID     int
 	ProposalNumber int
 	Value          int
 }
 
-// Messages to send to acceptors.
-type AcceptorMsg struct {
-	Prepare *PrepareMsg
-	Accept  *AcceptMsg
-}
-
-// Messages to send to proposers.
-type ProposerMsg struct {
+// A wrapper that is uses when messages are passed around.
+type Msg struct {
+	Prepare  *PrepareMsg
+	Accept   *AcceptMsg
 	Promise  *PromiseMsg
 	Accepted *AcceptedMsg
 }

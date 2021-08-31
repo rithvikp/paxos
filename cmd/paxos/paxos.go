@@ -15,10 +15,10 @@ func main() {
 
 	s.Run()
 
-	s.Acceptors[0].CompleteFailure = true
+	//s.Acceptors[0].CompleteFailure = true
 
 	s.Proposers[0].ClientInput <- 2
-	//time.Sleep(1 * time.Second)
+	time.Sleep(1000 * time.Millisecond)
 	s.Proposers[1].ClientInput <- 3
 
 	for {

@@ -6,10 +6,13 @@ import (
 )
 
 type Proposer struct {
-	ID                            int
-	ClientInput                   chan int
-	AcceptorInput                 <-chan ProposerMsg
-	Acceptors                     []chan<- AcceptorMsg
+	ID            int
+	ClientInput   chan int
+	AcceptorInput <-chan Msg
+	Acceptors     []chan<- Msg
+
+	slot                          int
+	smallestAvailableSlot         int
 	proposalNumber                int
 	highestAcceptedProposalNumber int
 	value                         int
@@ -23,15 +26,16 @@ func (p *Proposer) Run() {
 	for {
 		select {
 		case v := <-p.ClientInput:
-			p.handlePropose(v)
+			p.handleClientInput(v)
 
 		case msg := <-p.AcceptorInput:
 			if msg.Promise != nil {
 				p.handlePromise(*msg.Promise)
 				if p.promiseCount >= len(p.Acceptors)/2+1 && !p.sentAcceptMsg {
 					p.sentAcceptMsg = true
-					out := AcceptorMsg{
+					out := Msg{
 						Accept: &AcceptMsg{
+							Slot:           p.slot,
 							ProposerID:     p.ID,
 							ProposalNumber: p.proposalNumber,
 							Value:          p.value,
@@ -42,23 +46,29 @@ func (p *Proposer) Run() {
 					}
 				}
 			} else if msg.Accepted != nil {
-				fmt.Printf("Accepted a value! Proposer %v, Acceptor %v, #: %v, Value: %v\n", p.ID, msg.Accepted.AcceptorID, p.proposalNumber, p.value)
+				// TODO(rithvikp): Potentially check for a majority of acceptances before giving up
+				// on using the slot.
+				if msg.Accepted.Slot+1 > p.smallestAvailableSlot {
+					p.smallestAvailableSlot = msg.Accepted.Slot + 1
+				}
 			} else {
 				fmt.Printf("Proposer %v received a message without any content from acceptor\n", p.ID)
 			}
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(loopWaitTime)
 	}
 }
 
-func (p *Proposer) handlePropose(val int) {
+func (p *Proposer) handleClientInput(val int) {
 	p.value = val
 	p.proposalNumber++
 	p.promiseCount = 0
 	p.sentAcceptMsg = false
+	p.slot = p.smallestAvailableSlot
 
-	out := AcceptorMsg{
+	out := Msg{
 		Prepare: &PrepareMsg{
+			Slot:           p.slot,
 			ProposerID:     p.ID,
 			ProposalNumber: p.proposalNumber,
 		},

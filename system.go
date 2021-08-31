@@ -1,5 +1,12 @@
 package paxos
 
+import "time"
+
+const (
+	// The amount of time to wait between loop iterations
+	loopWaitTime time.Duration = 5 * time.Millisecond
+)
+
 type System struct {
 	Proposers []*Proposer
 	Acceptors []*Acceptor
@@ -8,18 +15,18 @@ type System struct {
 func Configure(proposers, acceptors, learners int) *System {
 	s := System{}
 
-	proposerInputsFromAcceptors := map[int]chan ProposerMsg{}
-	proposerInputsFromAcceptorsWO := map[int]chan<- ProposerMsg{}
-	acceptorInputsFromProposers := []chan AcceptorMsg{}
-	acceptorInputsFromProposersWO := []chan<- AcceptorMsg{}
+	proposerInputsFromAcceptors := map[int]chan Msg{}
+	proposerInputsFromAcceptorsWO := map[int]chan<- Msg{}
+	acceptorInputsFromProposers := []chan Msg{}
+	acceptorInputsFromProposersWO := []chan<- Msg{}
 	// First create relevant channels
 	for i := 0; i < proposers; i++ {
-		ch := make(chan ProposerMsg, 10)
+		ch := make(chan Msg, 10)
 		proposerInputsFromAcceptors[i] = ch
 		proposerInputsFromAcceptorsWO[i] = ch
 	}
 	for i := 0; i < acceptors; i++ {
-		ch := make(chan AcceptorMsg, 10)
+		ch := make(chan Msg, 10)
 		acceptorInputsFromProposers = append(acceptorInputsFromProposers, ch)
 		acceptorInputsFromProposersWO = append(acceptorInputsFromProposersWO, ch)
 	}
@@ -35,10 +42,10 @@ func Configure(proposers, acceptors, learners int) *System {
 
 	for i := 0; i < acceptors; i++ {
 		s.Acceptors = append(s.Acceptors, &Acceptor{
-			ID:                    i,
-			ProposerInput:         acceptorInputsFromProposers[i],
-			ProposerOutput:        proposerInputsFromAcceptorsWO,
-			highestProposalNumber: -1,
+			ID:             i,
+			ProposerInput:  acceptorInputsFromProposers[i],
+			ProposerOutput: proposerInputsFromAcceptorsWO,
+			state:          map[int]*slotState{},
 		})
 	}
 

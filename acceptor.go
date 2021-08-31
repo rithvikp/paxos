@@ -5,17 +5,22 @@ import (
 	"time"
 )
 
+type slotState struct {
+	slot                   int
+	highestProposalNumber  int
+	acceptedProposalNumber *int
+	acceptedValue          *int
+}
+
 type Acceptor struct {
 	ID             int
-	ProposerInput  <-chan AcceptorMsg
-	ProposerOutput map[int]chan<- ProposerMsg
+	ProposerInput  <-chan Msg
+	ProposerOutput map[int]chan<- Msg
 
 	// True iff the acceptor should simulate a complete failure.
 	CompleteFailure bool
 
-	highestProposalNumber  int
-	acceptedProposalNumber *int
-	acceptedValue          *int
+	state map[int]*slotState
 }
 
 func (a *Acceptor) Run() {
@@ -34,31 +39,62 @@ func (a *Acceptor) Run() {
 			fmt.Printf("Acceptor %v received a message without any content from proposer", a.ID)
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(loopWaitTime)
 	}
 }
 
 func (a *Acceptor) handlePrepare(msg PrepareMsg) {
-	if a.highestProposalNumber >= msg.ProposalNumber {
+	if _, ok := a.state[msg.Slot]; !ok {
+		a.state[msg.Slot] = &slotState{
+			slot:                  msg.Slot,
+			highestProposalNumber: -1,
+		}
+	}
+	state := a.state[msg.Slot]
+
+	if state.highestProposalNumber >= msg.ProposalNumber {
 		return
 	}
-	a.highestProposalNumber = msg.ProposalNumber
+	state.highestProposalNumber = msg.ProposalNumber
 
 	out := PromiseMsg{
-		AcceptedProposalNumber: a.acceptedProposalNumber,
-		AcceptedValue:          a.acceptedValue,
+		Slot:                   state.slot,
+		AcceptedProposalNumber: state.acceptedProposalNumber,
+		AcceptedValue:          state.acceptedValue,
 	}
-	a.ProposerOutput[msg.ProposerID] <- ProposerMsg{Promise: &out}
+	a.ProposerOutput[msg.ProposerID] <- Msg{Promise: &out}
 }
 
 func (a *Acceptor) handleAccept(msg AcceptMsg) {
-	if a.highestProposalNumber > msg.ProposalNumber {
+	// TODO(rithvikp): Should this situation be an error instead?
+	if _, ok := a.state[msg.Slot]; !ok {
+		a.state[msg.Slot] = &slotState{
+			slot:                  msg.Slot,
+			highestProposalNumber: -1,
+		}
+	}
+	state := a.state[msg.Slot]
+
+	if state.highestProposalNumber > msg.ProposalNumber {
 		return
 	}
 
-	a.acceptedProposalNumber = &msg.ProposalNumber
-	a.acceptedValue = &msg.Value
+	// TODO(rithvikp): Should there be an error if this value is different from a previously accepted value?
 
-	out := AcceptedMsg{AcceptorID: a.ID}
-	a.ProposerOutput[msg.ProposerID] <- ProposerMsg{Accepted: &out}
+	state.acceptedProposalNumber = &msg.ProposalNumber
+	state.acceptedValue = &msg.Value
+
+	out := AcceptedMsg{
+		Slot:           state.slot,
+		AcceptorID:     a.ID,
+		ProposalNumber: msg.ProposalNumber,
+		Value:          msg.Value,
+	}
+
+	for _, ch := range a.ProposerOutput {
+		ch <- Msg{Accepted: &out}
+	}
+
+	fmt.Printf("Accepted a value for slot %d --> Proposer: %v, Acceptor: %v, Proposal #: %d, Value: %v\n",
+		state.slot, msg.ProposerID, a.ID, msg.ProposalNumber, msg.Value)
 }
