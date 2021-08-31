@@ -17,26 +17,32 @@ func Configure(proposers, acceptors, learners int) *System {
 	s := System{}
 
 	proposerInputsFromAcceptors := map[int]*Channel{}
-	acceptorInputsFromProposers := []*Channel{}
+	acceptorInputsFromProposers := map[int]*Channel{}
+
+	supervisor := NewChannelSupervisor()
+
 	// First create relevant channels
 	for i := 0; i < proposers; i++ {
-		ch := NewChannel()
+		ch := supervisor.NewChannel()
 		proposerInputsFromAcceptors[i] = ch
 		s.Channels = append(s.Channels, ch)
 	}
 	for i := 0; i < acceptors; i++ {
-		ch := NewChannel()
-		acceptorInputsFromProposers = append(acceptorInputsFromProposers, ch)
+		ch := supervisor.NewChannel()
+		acceptorInputsFromProposers[i] = ch
 		s.Channels = append(s.Channels, ch)
 	}
 
 	for i := 0; i < proposers; i++ {
-		s.Proposers = append(s.Proposers, &Proposer{
+		p := &Proposer{
 			ID:            i,
 			ClientInput:   make(chan int, 10),
 			AcceptorInput: proposerInputsFromAcceptors[i],
 			Acceptors:     acceptorInputsFromProposers,
-		})
+		}
+		p.Init()
+
+		s.Proposers = append(s.Proposers, p)
 	}
 
 	for i := 0; i < acceptors; i++ {

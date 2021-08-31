@@ -4,6 +4,7 @@ package paxos
 type PrepareMsg struct {
 	Slot           int
 	ProposerID     int
+	AcceptorID     int
 	ProposalNumber int
 }
 
@@ -18,6 +19,7 @@ type PromiseMsg struct {
 type AcceptMsg struct {
 	Slot           int
 	ProposerID     int
+	AcceptorID     int
 	ProposalNumber int
 	Value          int
 }
