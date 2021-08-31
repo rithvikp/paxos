@@ -44,23 +44,6 @@ func (p *Proposer) Run() {
 			//fmt.Printf("Proposer %v, received msg: %+v\n", p.ID, msg)
 			if msg.Promise != nil {
 				p.handlePromise(*msg.Promise)
-				if p.promiseCount >= len(p.Acceptors)/2+1 && !p.sentAcceptMsg {
-					p.resendTimer.Stop()
-					p.sentAcceptMsg = true
-
-					for id, a := range p.Acceptors {
-						out := Msg{
-							Accept: &AcceptMsg{
-								Slot:           p.slot,
-								ProposerID:     p.ID,
-								AcceptorID:     id,
-								ProposalNumber: p.proposalNumber,
-								Value:          p.value,
-							},
-						}
-						a.Write() <- out
-					}
-				}
 			} else if msg.Accepted != nil {
 				// TODO(rithvikp): Potentially check for a majority of acceptances before giving up
 				// on using the slot.
@@ -79,6 +62,7 @@ func (p *Proposer) Run() {
 			p.proposalNumber = 0
 			p.handleClientInput(v)
 		}
+
 		time.Sleep(loopWaitTime)
 	}
 }
@@ -109,12 +93,27 @@ func (p *Proposer) handleClientInput(val int) {
 func (p *Proposer) handlePromise(msg PromiseMsg) {
 	p.promiseCount++
 
-	if msg.AcceptedProposalNumber == nil {
-		return
-	}
-
-	if *msg.AcceptedProposalNumber > p.highestAcceptedProposalNumber {
+	if msg.AcceptedProposalNumber != nil && *msg.AcceptedProposalNumber > p.highestAcceptedProposalNumber {
 		p.value = *msg.AcceptedValue
 		p.highestAcceptedProposalNumber = *msg.AcceptedProposalNumber
+	}
+
+	// Enter phase 2 if applicable.
+	if p.promiseCount >= len(p.Acceptors)/2+1 && !p.sentAcceptMsg {
+		p.resendTimer.Stop()
+		p.sentAcceptMsg = true
+
+		for id, a := range p.Acceptors {
+			out := Msg{
+				Accept: &AcceptMsg{
+					Slot:           p.slot,
+					ProposerID:     p.ID,
+					AcceptorID:     id,
+					ProposalNumber: p.proposalNumber,
+					Value:          p.value,
+				},
+			}
+			a.Write() <- out
+		}
 	}
 }

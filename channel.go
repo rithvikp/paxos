@@ -57,9 +57,7 @@ func (c *Channel) Run() {
 	for {
 		select {
 		case in := <-c.write:
-			if c.s.AskToSend(in) {
-				c.read <- in
-			}
+			c.read <- in
 		}
 	}
 }

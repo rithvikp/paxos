@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rithvikp/paxos"
@@ -11,11 +12,10 @@ const (
 )
 
 func main() {
+	fmt.Println("Starting Paxos")
 	s := paxos.Configure(2, 5, 0)
 
 	s.Run()
-
-	//s.Acceptors[0].CompleteFailure = true
 
 	s.Proposers[0].ClientInput <- 2
 	time.Sleep(1000 * time.Millisecond)

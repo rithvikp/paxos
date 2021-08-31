@@ -17,18 +17,11 @@ type Acceptor struct {
 	ProposerInput  *Channel
 	ProposerOutput map[int]*Channel
 
-	// True iff the acceptor should simulate a complete failure.
-	CompleteFailure bool
-
 	state map[int]*slotState
 }
 
 func (a *Acceptor) Run() {
 	for {
-		if a.CompleteFailure {
-			time.Sleep(30 * time.Millisecond)
-			continue
-		}
 		msg := <-a.ProposerInput.Read()
 
 		if msg.Prepare != nil {
