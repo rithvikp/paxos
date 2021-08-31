@@ -8,8 +8,8 @@ import (
 type Proposer struct {
 	ID            int
 	ClientInput   chan int
-	AcceptorInput <-chan Msg
-	Acceptors     []chan<- Msg
+	AcceptorInput *Channel
+	Acceptors     []*Channel
 
 	slot                          int
 	smallestAvailableSlot         int
@@ -28,7 +28,7 @@ func (p *Proposer) Run() {
 		case v := <-p.ClientInput:
 			p.handleClientInput(v)
 
-		case msg := <-p.AcceptorInput:
+		case msg := <-p.AcceptorInput.Read():
 			if msg.Promise != nil {
 				p.handlePromise(*msg.Promise)
 				if p.promiseCount >= len(p.Acceptors)/2+1 && !p.sentAcceptMsg {
@@ -42,7 +42,7 @@ func (p *Proposer) Run() {
 						},
 					}
 					for _, a := range p.Acceptors {
-						a <- out
+						a.Write() <- out
 					}
 				}
 			} else if msg.Accepted != nil {
@@ -75,7 +75,7 @@ func (p *Proposer) handleClientInput(val int) {
 	}
 
 	for _, a := range p.Acceptors {
-		a <- out
+		a.Write() <- out
 	}
 }
 

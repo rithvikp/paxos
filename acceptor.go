@@ -14,8 +14,8 @@ type slotState struct {
 
 type Acceptor struct {
 	ID             int
-	ProposerInput  <-chan Msg
-	ProposerOutput map[int]chan<- Msg
+	ProposerInput  *Channel
+	ProposerOutput map[int]*Channel
 
 	// True iff the acceptor should simulate a complete failure.
 	CompleteFailure bool
@@ -29,7 +29,7 @@ func (a *Acceptor) Run() {
 			time.Sleep(30 * time.Millisecond)
 			continue
 		}
-		msg := <-a.ProposerInput
+		msg := <-a.ProposerInput.Read()
 
 		if msg.Prepare != nil {
 			a.handlePrepare(*msg.Prepare)
@@ -62,7 +62,7 @@ func (a *Acceptor) handlePrepare(msg PrepareMsg) {
 		AcceptedProposalNumber: state.acceptedProposalNumber,
 		AcceptedValue:          state.acceptedValue,
 	}
-	a.ProposerOutput[msg.ProposerID] <- Msg{Promise: &out}
+	a.ProposerOutput[msg.ProposerID].Write() <- Msg{Promise: &out}
 }
 
 func (a *Acceptor) handleAccept(msg AcceptMsg) {
@@ -92,7 +92,7 @@ func (a *Acceptor) handleAccept(msg AcceptMsg) {
 	}
 
 	for _, ch := range a.ProposerOutput {
-		ch <- Msg{Accepted: &out}
+		ch.Write() <- Msg{Accepted: &out}
 	}
 
 	fmt.Printf("Accepted a value for slot %d --> Proposer: %v, Acceptor: %v, Proposal #: %d, Value: %v\n",

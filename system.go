@@ -10,25 +10,24 @@ const (
 type System struct {
 	Proposers []*Proposer
 	Acceptors []*Acceptor
+	Channels  []*Channel
 }
 
 func Configure(proposers, acceptors, learners int) *System {
 	s := System{}
 
-	proposerInputsFromAcceptors := map[int]chan Msg{}
-	proposerInputsFromAcceptorsWO := map[int]chan<- Msg{}
-	acceptorInputsFromProposers := []chan Msg{}
-	acceptorInputsFromProposersWO := []chan<- Msg{}
+	proposerInputsFromAcceptors := map[int]*Channel{}
+	acceptorInputsFromProposers := []*Channel{}
 	// First create relevant channels
 	for i := 0; i < proposers; i++ {
-		ch := make(chan Msg, 10)
+		ch := NewChannel()
 		proposerInputsFromAcceptors[i] = ch
-		proposerInputsFromAcceptorsWO[i] = ch
+		s.Channels = append(s.Channels, ch)
 	}
 	for i := 0; i < acceptors; i++ {
-		ch := make(chan Msg, 10)
+		ch := NewChannel()
 		acceptorInputsFromProposers = append(acceptorInputsFromProposers, ch)
-		acceptorInputsFromProposersWO = append(acceptorInputsFromProposersWO, ch)
+		s.Channels = append(s.Channels, ch)
 	}
 
 	for i := 0; i < proposers; i++ {
@@ -36,7 +35,7 @@ func Configure(proposers, acceptors, learners int) *System {
 			ID:            i,
 			ClientInput:   make(chan int, 10),
 			AcceptorInput: proposerInputsFromAcceptors[i],
-			Acceptors:     acceptorInputsFromProposersWO,
+			Acceptors:     acceptorInputsFromProposers,
 		})
 	}
 
@@ -44,7 +43,7 @@ func Configure(proposers, acceptors, learners int) *System {
 		s.Acceptors = append(s.Acceptors, &Acceptor{
 			ID:             i,
 			ProposerInput:  acceptorInputsFromProposers[i],
-			ProposerOutput: proposerInputsFromAcceptorsWO,
+			ProposerOutput: proposerInputsFromAcceptors,
 			state:          map[int]*slotState{},
 		})
 	}
@@ -59,5 +58,9 @@ func (s *System) Run() {
 
 	for _, a := range s.Acceptors {
 		go a.Run()
+	}
+
+	for _, ch := range s.Channels {
+		go ch.Run()
 	}
 }
