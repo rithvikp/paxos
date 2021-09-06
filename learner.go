@@ -50,7 +50,6 @@ func (l *Learner) handleLearn(msg LearnMsg) {
 	}
 	pl.AcceptedValuesToCount[msg.Value] += 1
 
-	fmt.Println(pl.AcceptedValuesToCount[msg.Value])
 	if pl.AcceptedValuesToCount[msg.Value] >= l.AcceptorCount/2+1 {
 		l.Log[msg.Slot] = msg.Value
 

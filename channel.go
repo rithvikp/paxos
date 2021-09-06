@@ -21,17 +21,20 @@ type Channel struct {
 	read     chan Msg
 	write    chan Msg
 	dropRate float64
+	log      bool
 }
 
 // NewChannel creates a new channel. DropRate should be a number between 0 and 1 (inclusive): it
-// determines what percentage of messages on the channel will be dropped.
-func (s *ChannelSupervisor) NewChannel(dropRate float64) *Channel {
+// determines what percentage of messages on the channel will be dropped. If log is true, any
+// messages sent via the channel will be logged.
+func (s *ChannelSupervisor) NewChannel(dropRate float64, log bool) *Channel {
 	return &Channel{
 		s:        s,
 		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
 		read:     make(chan Msg, 10),
 		write:    make(chan Msg, 10),
 		dropRate: dropRate,
+		log:      log,
 	}
 }
 
@@ -49,10 +52,14 @@ func (c *Channel) Run() {
 		case in := <-c.write:
 			time.Sleep(time.Duration(c.rand.Intn(20)) * time.Millisecond)
 			if c.rand.Float64() > c.dropRate {
-				fmt.Printf("SENT: %s\n", MsgToString(in))
+				if c.log {
+					fmt.Printf("SENT: %s\n", MsgToString(in))
+				}
 				c.read <- in
 			} else {
-				fmt.Printf("\tNOT SENT: %s\n", MsgToString(in))
+				if c.log {
+					fmt.Printf("\tNOT SENT: %s\n", MsgToString(in))
+				}
 			}
 		}
 	}

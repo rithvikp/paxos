@@ -2,14 +2,30 @@ package paxos
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
+const (
+	leaderUpdateInterval time.Duration = 100 * time.Millisecond
+)
+
+type leaderInfo struct {
+	leaderID           int
+	updateLeaderToSelf bool
+}
+
 type Proposer struct {
-	ID            int
-	ClientInput   chan int
-	AcceptorInput *Channel
-	Acceptors     map[int]*Channel
+	ID                 int
+	ClientInput        chan int
+	Proposers          map[int]chan int
+	HeartbeatInput     *Channel         // For leader selection.
+	ProposerHeartbeats map[int]*Channel // For leader selection.
+	AcceptorInput      *Channel
+	Acceptors          map[int]*Channel
+
+	leaderInfoMu sync.RWMutex
+	leaderInfo   leaderInfo
 
 	slot                          int
 	value                         int
@@ -31,6 +47,7 @@ const (
 
 func (p *Proposer) Init() {
 	p.highestAcceptedProposalNumber = -1
+	p.leaderInfo.leaderID = p.ID
 
 	timer := time.NewTimer(proposalRepeatInterval)
 	timer.Stop()
@@ -38,6 +55,7 @@ func (p *Proposer) Init() {
 }
 
 func (p *Proposer) Run() {
+	go p.trackLeader()
 	for {
 		select {
 		case msg := <-p.AcceptorInput.Read():
@@ -50,7 +68,9 @@ func (p *Proposer) Run() {
 				if msg.Accepted.Slot+1 > p.smallestAvailableSlot {
 					p.smallestAvailableSlot = msg.Accepted.Slot + 1
 				}
-				p.resendTimer.Stop()
+				if msg.Accepted.ProposalNumber == p.proposalNumber {
+					p.resendTimer.Stop()
+				}
 			} else {
 				fmt.Printf("Proposer %v received a message without any content from acceptor\n", p.ID)
 			}
@@ -60,12 +80,77 @@ func (p *Proposer) Run() {
 			p.handleClientInput(p.value)
 
 		case v := <-p.ClientInput:
-			p.proposalNumber = 0
-			p.handleClientInput(v)
+			if p.isLeader() {
+				p.proposalNumber = 0
+				p.handleClientInput(v)
+			} else {
+				leader := p.leader()
+				fmt.Printf("[PROPOSER] Forwarded a message from proposer %v to proposer %v\n", p.ID, leader)
+				p.Proposers[leader] <- v
+			}
 		}
 
 		time.Sleep(loopWaitTime)
 	}
+}
+
+func (p *Proposer) trackLeader() {
+	for {
+		// Send heartbeat messages
+		for destProposerID, ch := range p.ProposerHeartbeats {
+			out := LeaderMsg{
+				ProposerID:     p.ID,
+				DestProposerID: destProposerID,
+			}
+			ch.Write() <- Msg{Leader: &out}
+		}
+
+		// Update the leader based on the received heartbeats
+		highest := p.ID
+		run := true
+		for run {
+			select {
+			case msg := <-p.HeartbeatInput.Read():
+				if msg.Leader != nil {
+					if msg.Leader.ProposerID > highest {
+						highest = msg.Leader.ProposerID
+					}
+				} else {
+					fmt.Printf("Proposer %v received a message without any relevant content from another proposer\n", p.ID)
+				}
+			default:
+				run = false
+			}
+		}
+
+		p.leaderInfoMu.Lock()
+		if highest > p.ID {
+			p.leaderInfo.leaderID = highest
+			p.leaderInfo.updateLeaderToSelf = false
+		} else if p.leaderInfo.updateLeaderToSelf {
+			p.leaderInfo.leaderID = p.ID
+			p.leaderInfo.updateLeaderToSelf = false
+		} else {
+			p.leaderInfo.updateLeaderToSelf = true
+		}
+		p.leaderInfoMu.Unlock()
+
+		time.Sleep(leaderUpdateInterval)
+	}
+}
+
+func (p *Proposer) isLeader() bool {
+	p.leaderInfoMu.RLock()
+	defer p.leaderInfoMu.RUnlock()
+
+	return p.leaderInfo.leaderID == p.ID
+}
+
+func (p *Proposer) leader() int {
+	p.leaderInfoMu.RLock()
+	defer p.leaderInfoMu.RUnlock()
+
+	return p.leaderInfo.leaderID
 }
 
 func (p *Proposer) handleClientInput(val int) {

@@ -5,6 +5,17 @@ import (
 	"fmt"
 )
 
+// Client request
+type ClientMsg struct {
+	Value int
+}
+
+// Leader updates
+type LeaderMsg struct {
+	ProposerID     int
+	DestProposerID int
+}
+
 // Phase 1A
 type PrepareMsg struct {
 	Slot           int
@@ -49,6 +60,8 @@ type LearnMsg struct {
 
 // A wrapper that is uses when messages are passed around.
 type Msg struct {
+	Client   *ClientMsg
+	Leader   *LeaderMsg
 	Prepare  *PrepareMsg
 	Accept   *AcceptMsg
 	Promise  *PromiseMsg
@@ -59,7 +72,13 @@ type Msg struct {
 func MsgToString(msg Msg) string {
 	var data interface{}
 	var prefix string
-	if msg.Prepare != nil {
+	if msg.Client != nil {
+		data = msg.Client
+		prefix = "Client"
+	} else if msg.Leader != nil {
+		data = msg.Leader
+		prefix = "Leader"
+	} else if msg.Prepare != nil {
 		data = msg.Prepare
 		prefix = "Prepare"
 	} else if msg.Accept != nil {

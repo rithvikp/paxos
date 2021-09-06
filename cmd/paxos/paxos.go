@@ -17,9 +17,9 @@ func main() {
 
 	s.Run()
 
-	s.Proposers[0].ClientInput <- 2
-	time.Sleep(1000 * time.Millisecond)
 	s.Proposers[1].ClientInput <- 3
+	time.Sleep(1000 * time.Millisecond)
+	s.Proposers[0].ClientInput <- 2
 
 	for {
 		time.Sleep(200 * time.Second)
