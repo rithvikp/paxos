@@ -40,12 +40,20 @@ type AcceptedMsg struct {
 	Value          int
 }
 
+type LearnMsg struct {
+	Slot       int
+	AcceptorID int
+	LearnerID  int
+	Value      int
+}
+
 // A wrapper that is uses when messages are passed around.
 type Msg struct {
 	Prepare  *PrepareMsg
 	Accept   *AcceptMsg
 	Promise  *PromiseMsg
 	Accepted *AcceptedMsg
+	Learn    *LearnMsg
 }
 
 func MsgToString(msg Msg) string {
@@ -63,6 +71,9 @@ func MsgToString(msg Msg) string {
 	} else if msg.Accepted != nil {
 		data = msg.Accepted
 		prefix = "Accepted"
+	} else if msg.Learn != nil {
+		data = msg.Learn
+		prefix = "Learn"
 	}
 
 	b, err := json.Marshal(data)

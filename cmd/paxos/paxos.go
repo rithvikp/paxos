@@ -13,7 +13,7 @@ const (
 
 func main() {
 	fmt.Println("Starting Paxos")
-	s := paxos.Configure(2, 5, 0)
+	s := paxos.Configure(2, 5, 1)
 
 	s.Run()
 

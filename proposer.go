@@ -32,7 +32,7 @@ const (
 func (p *Proposer) Init() {
 	p.highestAcceptedProposalNumber = -1
 
-	timer := time.NewTimer(1 * time.Second)
+	timer := time.NewTimer(proposalRepeatInterval)
 	timer.Stop()
 	p.resendTimer = timer
 }
@@ -50,6 +50,7 @@ func (p *Proposer) Run() {
 				if msg.Accepted.Slot+1 > p.smallestAvailableSlot {
 					p.smallestAvailableSlot = msg.Accepted.Slot + 1
 				}
+				p.resendTimer.Stop()
 			} else {
 				fmt.Printf("Proposer %v received a message without any content from acceptor\n", p.ID)
 			}
@@ -100,7 +101,7 @@ func (p *Proposer) handlePromise(msg PromiseMsg) {
 
 	// Enter phase 2 if applicable.
 	if p.promiseCount >= len(p.Acceptors)/2+1 && !p.sentAcceptMsg {
-		p.resendTimer.Stop()
+		p.resendTimer = time.NewTimer(proposalRepeatInterval)
 		p.sentAcceptMsg = true
 
 		for aID, a := range p.Acceptors {

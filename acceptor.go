@@ -13,9 +13,10 @@ type slotState struct {
 }
 
 type Acceptor struct {
-	ID             int
-	ProposerInput  *Channel
-	ProposerOutput map[int]*Channel
+	ID            int
+	ProposerInput *Channel
+	Proposers     map[int]*Channel
+	Learners      map[int]*Channel
 
 	state map[int]*slotState
 }
@@ -57,7 +58,7 @@ func (a *Acceptor) handlePrepare(msg PrepareMsg) {
 		AcceptedProposalNumber: state.acceptedProposalNumber,
 		AcceptedValue:          state.acceptedValue,
 	}
-	a.ProposerOutput[msg.ProposerID].Write() <- Msg{Promise: &out}
+	a.Proposers[msg.ProposerID].Write() <- Msg{Promise: &out}
 }
 
 func (a *Acceptor) handleAccept(msg AcceptMsg) {
@@ -79,7 +80,7 @@ func (a *Acceptor) handleAccept(msg AcceptMsg) {
 	state.acceptedProposalNumber = &msg.ProposalNumber
 	state.acceptedValue = &msg.Value
 
-	for pID, ch := range a.ProposerOutput {
+	for pID, ch := range a.Proposers {
 		out := AcceptedMsg{
 			Slot:           state.slot,
 			ProposerID:     pID,
@@ -90,6 +91,16 @@ func (a *Acceptor) handleAccept(msg AcceptMsg) {
 		ch.Write() <- Msg{Accepted: &out}
 	}
 
-	fmt.Printf("Accepted a value for slot %d --> Proposer: %v, Acceptor: %v, Proposal #: %d, Value: %v\n",
+	for lID, ch := range a.Learners {
+		out := LearnMsg{
+			Slot:       state.slot,
+			AcceptorID: a.ID,
+			LearnerID:  lID,
+			Value:      msg.Value,
+		}
+		ch.Write() <- Msg{Learn: &out}
+	}
+
+	fmt.Printf("[ACCEPTOR] Accepted a value for slot %d --> Proposer: %v, Acceptor: %v, Proposal #: %d, Value: %v\n",
 		state.slot, msg.ProposerID, a.ID, msg.ProposalNumber, msg.Value)
 }
