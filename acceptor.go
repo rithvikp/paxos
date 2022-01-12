@@ -51,12 +51,23 @@ func (a *Acceptor) handlePrepare(msg PrepareMsg) {
 	}
 	state.highestProposalNumber = msg.ProposalNumber
 
+	maxAcceptedSlot := -1
+	for slot, st := range a.state {
+		if st.acceptedValue == nil {
+			continue
+		}
+		if slot > maxAcceptedSlot {
+			maxAcceptedSlot = slot
+		}
+	}
+
 	out := PromiseMsg{
 		Slot:                   state.slot,
 		ProposerID:             msg.ProposerID,
 		AcceptorID:             a.ID,
 		AcceptedProposalNumber: state.acceptedProposalNumber,
 		AcceptedValue:          state.acceptedValue,
+		HighestAcceptedSlot:    maxAcceptedSlot,
 	}
 	a.Proposers[msg.ProposerID].Write() <- Msg{Promise: &out}
 }

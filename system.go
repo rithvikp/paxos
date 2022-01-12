@@ -20,7 +20,7 @@ func Configure(proposers, acceptors, learners int) *System {
 	proposerInputsFromClients := map[int]chan int{}
 	heartbeatInputFromProposers := map[int]*Channel{}
 	proposerInputsFromAcceptors := map[int]*Channel{}
-	acceptorInputsFromProposers := map[int]*Channel{}
+	acceptorInputsFromProposers := map[int]*acceptorState{}
 	learnerInputFromAcceptors := map[int]*Channel{}
 
 	supervisor := NewChannelSupervisor()
@@ -40,7 +40,7 @@ func Configure(proposers, acceptors, learners int) *System {
 	}
 	for i := 0; i < acceptors; i++ {
 		ch := supervisor.NewChannel(0.2, true)
-		acceptorInputsFromProposers[i] = ch
+		acceptorInputsFromProposers[i] = &acceptorState{Channel: ch}
 		s.Channels = append(s.Channels, ch)
 	}
 	for i := 0; i < learners; i++ {
@@ -67,7 +67,7 @@ func Configure(proposers, acceptors, learners int) *System {
 	for i := 0; i < acceptors; i++ {
 		s.Acceptors = append(s.Acceptors, &Acceptor{
 			ID:            i,
-			ProposerInput: acceptorInputsFromProposers[i],
+			ProposerInput: acceptorInputsFromProposers[i].Channel,
 			Proposers:     proposerInputsFromAcceptors,
 			Learners:      learnerInputFromAcceptors,
 			state:         map[int]*slotState{},

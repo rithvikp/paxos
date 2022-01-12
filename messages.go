@@ -31,6 +31,7 @@ type PromiseMsg struct {
 	AcceptorID             int
 	AcceptedProposalNumber *int
 	AcceptedValue          *int
+	HighestAcceptedSlot    int
 }
 
 // Phase 2A

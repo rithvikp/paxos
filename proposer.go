@@ -15,6 +15,11 @@ type leaderInfo struct {
 	updateLeaderToSelf bool
 }
 
+type acceptorState struct {
+	Channel             *Channel
+	HighestAcceptedSlot int
+}
+
 type Proposer struct {
 	ID                 int
 	ClientInput        chan int
@@ -22,7 +27,7 @@ type Proposer struct {
 	HeartbeatInput     *Channel         // For leader selection.
 	ProposerHeartbeats map[int]*Channel // For leader selection.
 	AcceptorInput      *Channel
-	Acceptors          map[int]*Channel
+	Acceptors          map[int]*acceptorState
 
 	leaderInfoMu sync.RWMutex
 	leaderInfo   leaderInfo
@@ -35,6 +40,7 @@ type Proposer struct {
 	promiseCount int
 	// Whether accept messages have been sent for the current proposal.
 	sentAcceptMsg bool
+	skipPrepare   bool
 
 	resendTimer *time.Timer
 
@@ -81,8 +87,10 @@ func (p *Proposer) Run() {
 
 		case v := <-p.ClientInput:
 			if p.isLeader() {
-				p.proposalNumber = 0
-				p.handleClientInput(v)
+				if p.skipPrepare {
+				} else {
+					p.handleClientInput(v)
+				}
 			} else {
 				leader := p.leader()
 				fmt.Printf("[PROPOSER] Forwarded a message from proposer %v to proposer %v\n", p.ID, leader)
@@ -91,6 +99,57 @@ func (p *Proposer) Run() {
 		}
 
 		time.Sleep(loopWaitTime)
+	}
+}
+
+func (p *Proposer) handleClientInput(val int) {
+	p.slot = p.smallestAvailableSlot
+	p.value = val
+	p.proposalNumber++
+
+	p.highestAcceptedProposalNumber = -1
+	p.promiseCount = 0
+	p.sentAcceptMsg = false
+	p.resendTimer = time.NewTimer(proposalRepeatInterval)
+
+	for aID, a := range p.Acceptors {
+		out := Msg{
+			Prepare: &PrepareMsg{
+				Slot:           p.slot,
+				ProposerID:     p.ID,
+				AcceptorID:     aID,
+				ProposalNumber: p.proposalNumber,
+			},
+		}
+		a.Channel.Write() <- out
+	}
+}
+
+func (p *Proposer) handlePromise(msg PromiseMsg) {
+	p.promiseCount++
+
+	if msg.AcceptedProposalNumber != nil && *msg.AcceptedProposalNumber > p.highestAcceptedProposalNumber {
+		p.value = *msg.AcceptedValue
+		p.highestAcceptedProposalNumber = *msg.AcceptedProposalNumber
+	}
+
+	// Enter phase 2 if applicable.
+	if p.promiseCount >= len(p.Acceptors)/2+1 && !p.sentAcceptMsg {
+		p.resendTimer = time.NewTimer(proposalRepeatInterval)
+		p.sentAcceptMsg = true
+
+		for aID, a := range p.Acceptors {
+			out := Msg{
+				Accept: &AcceptMsg{
+					Slot:           p.slot,
+					ProposerID:     p.ID,
+					AcceptorID:     aID,
+					ProposalNumber: p.proposalNumber,
+					Value:          p.value,
+				},
+			}
+			a.Channel.Write() <- out
+		}
 	}
 }
 
@@ -151,55 +210,4 @@ func (p *Proposer) leader() int {
 	defer p.leaderInfoMu.RUnlock()
 
 	return p.leaderInfo.leaderID
-}
-
-func (p *Proposer) handleClientInput(val int) {
-	p.slot = p.smallestAvailableSlot
-	p.value = val
-	p.proposalNumber++
-
-	p.highestAcceptedProposalNumber = -1
-	p.promiseCount = 0
-	p.sentAcceptMsg = false
-	p.resendTimer = time.NewTimer(proposalRepeatInterval)
-
-	for aID, a := range p.Acceptors {
-		out := Msg{
-			Prepare: &PrepareMsg{
-				Slot:           p.slot,
-				ProposerID:     p.ID,
-				AcceptorID:     aID,
-				ProposalNumber: p.proposalNumber,
-			},
-		}
-		a.Write() <- out
-	}
-}
-
-func (p *Proposer) handlePromise(msg PromiseMsg) {
-	p.promiseCount++
-
-	if msg.AcceptedProposalNumber != nil && *msg.AcceptedProposalNumber > p.highestAcceptedProposalNumber {
-		p.value = *msg.AcceptedValue
-		p.highestAcceptedProposalNumber = *msg.AcceptedProposalNumber
-	}
-
-	// Enter phase 2 if applicable.
-	if p.promiseCount >= len(p.Acceptors)/2+1 && !p.sentAcceptMsg {
-		p.resendTimer = time.NewTimer(proposalRepeatInterval)
-		p.sentAcceptMsg = true
-
-		for aID, a := range p.Acceptors {
-			out := Msg{
-				Accept: &AcceptMsg{
-					Slot:           p.slot,
-					ProposerID:     p.ID,
-					AcceptorID:     aID,
-					ProposalNumber: p.proposalNumber,
-					Value:          p.value,
-				},
-			}
-			a.Write() <- out
-		}
-	}
 }
